@@ -5,58 +5,99 @@ provider:
   runtime: nodejs16.x
   stage: dev
   region: us-east-1
+  environment:
+    DYNAMODB_TABLE_NAME: ${self:custom.serverlessTableName}
+
+plugins:
+  - serverless-iam-roles-per-function
+
+custom:
+  serverlessTableName: serveless-task-${self:provider.stage}
 
 functions:
-  hello:
-    handler: src/handler.hello
-#    The following are a few example events you can configure
-#    NOTE: Please make sure to change your handler code to work with those events
-#    Check the event documentation for details
-#    events:
-#      - httpApi:
-#          path: /users/create
-#          method: get
-#      - websocket: $connect
-#      - s3: ${env:BUCKET}
-#      - schedule: rate(10 minutes)
-#      - sns: greeter-topic
-#      - stream: arn:aws:dynamodb:region:XXXXXX:table/foo/stream/1970-01-01T00:00:00.000
-#      - alexaSkill: amzn1.ask.skill.xx-xx-xx-xx
-#      - alexaSmartHome: amzn1.ask.skill.xx-xx-xx-xx
-#      - iot:
-#          sql: "SELECT * FROM 'some_topic'"
-#      - cloudwatchEvent:
-#          event:
-#            source:
-#              - "aws.ec2"
-#            detail-type:
-#              - "EC2 Instance State-change Notification"
-#            detail:
-#              state:
-#                - pending
-#      - cloudwatchLog: '/aws/lambda/hello'
-#      - cognitoUserPool:
-#          pool: MyUserPool
-#          trigger: PreSignUp
-#      - alb:
-#          listenerArn: arn:aws:elasticloadbalancing:us-east-1:XXXXXX:listener/app/my-load-balancer/50dc6c495c0c9188/
-#          priority: 1
-#          conditions:
-#            host: example.com
-#            path: /hello
+  getBlogs:
+    handler: src/api.getBlog
+    name: get-blog
+    memorySize: 128 # mb
+    timeout: 5 # seconds
+    events:
+      - http:
+          path: blogs/{id}
+          method: GET
+    iamRoleStatements:
+      - Effect: "Allow"
+        Action:
+          - "dynamodb:GetItem"
+        Resource: !GetAtt ServerlessTable.Arn
+  createBlog:
+    handler: src/api.createBlog
+    name: create-blog
+    memorySize: 128 # mb
+    timeout: 5 # seconds
+    events:
+      - http:
+          path: blogs
+          method: POST
+    iamRoleStatements:
+      - Effect: "Allow"
+        Action:
+          - "dynamodb:PutItem"
+        Resource: !GetAtt ServerlessTable.Arn
+  updateBlog:
+    handler: src/api.updateBlog
+    name: update-blog
+    memorySize: 128 # mb
+    timeout: 5 # seconds
+    events:
+      - http:
+          path: blogs/{id}
+          method: PUT
+    iamRoleStatements:
+      - Effect: "Allow"
+        Action:
+          - "dynamodb:UpdateItem"
+        Resource: !GetAtt ServerlessTable.Arn
+  deleteblogPost:
+    handler: src/api.deleteBlog
+    name: delete-blog
+    memorySize: 128 # mb
+    timeout: 5 # seconds
+    events:
+      - http:
+          path: blogs/{id}
+          method: DELETE
+    iamRoleStatements:
+      - Effect: "Allow"
+        Action:
+          - "dynamodb:DeleteItem"
+        Resource: !GetAtt ServerlessTable.Arn
+  getAllPosts:
+    handler: src/api.getAllBlogs
+    name: get-all-blogs
+    memorySize: 128 # mb
+    timeout: 5 # seconds
+    events:
+      - http:
+          path: blog
+          method: GET
+    iamRoleStatements:
+      - Effect: "Allow"
+        Action:
+          - "dynamodb:Scan"
+        Resource: !GetAtt ServerlessTable.Arn
 
-#    Define function environment variables here
-#    environment:
-#      variable2: value2
-
-# you can add CloudFormation resource templates here
-#resources:
-#  Resources:
-#    NewResource:
-#      Type: AWS::S3::Bucket
-#      Properties:
-#        BucketName: my-new-bucket
-#  Outputs:
-#     NewOutput:
-#       Description: "Description for the output"
-#       Value: "Some output value"
+resources:
+  Resources:
+    ServerlessTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:custom.serverlessTableName}
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
